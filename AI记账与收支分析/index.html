@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>AI 记账本</title>
+<script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    background: #f4f5f7; color: #1f2329; font-size: 15px; line-height: 1.5;
+  }
+  #page { max-width: 520px; margin: 0 auto; padding: 16px 14px 48px; }
+  .card { background: #fff; border-radius: 14px; padding: 16px; margin-bottom: 14px; box-shadow: 0 1px 4px rgba(31,35,41,.06); }
+  .hide { display: none !important; }
+
+  /* ---------- 登录页 ---------- */
+  #loginView { max-width: 380px; margin: 8vh auto 0; }
+  .logo { text-align: center; margin-bottom: 22px; }
+  .logo .icon { font-size: 44px; }
+  .logo h1 { font-size: 22px; margin-top: 6px; }
+  .logo p { color: #8a919f; font-size: 13px; margin-top: 4px; }
+  .tabs { display: flex; margin-bottom: 16px; border-bottom: 1px solid #eef0f3; }
+  .tabs button {
+    flex: 1; background: none; border: none; padding: 10px 0; font-size: 15px;
+    color: #8a919f; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .tabs button.active { color: #3370ff; border-bottom-color: #3370ff; font-weight: 600; }
+  .field { margin-bottom: 12px; }
+  .field input, .field select {
+    width: 100%; padding: 11px 12px; border: 1px solid #e0e3e8; border-radius: 10px;
+    font-size: 15px; background: #fff; outline: none; font-family: inherit;
+  }
+  .field input:focus { border-color: #3370ff; }
+  .field label { display: block; font-size: 13px; color: #646a73; margin-bottom: 5px; }
+  .row { display: flex; gap: 10px; }
+  .row .field { flex: 1; }
+  .row .btn-side { width: 112px; flex: none; align-self: flex-end; }
+  .btn {
+    display: block; width: 100%; padding: 12px; border: none; border-radius: 10px;
+    font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit;
+  }
+  .btn:disabled { opacity: .55; cursor: not-allowed; }
+  .btn-primary { background: #3370ff; color: #fff; }
+  .btn-plain { background: #eef4ff; color: #3370ff; }
+  .btn-ghost { background: none; border: 1px solid #dcdfe6; color: #646a73; }
+  .link { color: #3370ff; font-size: 13px; cursor: pointer; text-align: center; margin-top: 10px; display: block; background: none; border: none; font-family: inherit; width: 100%; }
+  .err { color: #e54545; font-size: 13px; min-height: 18px; margin: 4px 0 8px; }
+
+  /* ---------- 主界面 ---------- */
+  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  header .title { font-size: 20px; font-weight: 700; }
+  header .user { font-size: 12px; color: #8a919f; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  header button { background: none; border: none; color: #8a919f; font-size: 13px; cursor: pointer; padding: 6px 4px; font-family: inherit; }
+
+  .inputbar { display: flex; gap: 8px; align-items: flex-start; }
+  .inputbar textarea {
+    flex: 1; resize: none; border: 1px solid #e0e3e8; border-radius: 10px; padding: 11px 12px;
+    font-size: 15px; font-family: inherit; outline: none; height: 44px; background: #fff;
+  }
+  .inputbar textarea:focus { border-color: #3370ff; }
+  .iconbtn {
+    width: 44px; height: 44px; border-radius: 10px; border: 1px solid #e0e3e8; background: #fff;
+    font-size: 20px; cursor: pointer; flex: none; line-height: 1;
+  }
+  .iconbtn.listening { background: #ffecec; border-color: #e54545; animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { opacity: .55; } }
+  .hint { font-size: 12px; color: #a6abb5; margin-top: 8px; }
+  .actions { display: flex; gap: 10px; margin-top: 12px; }
+  .actions .btn { flex: 1; }
+
+  /* 记账确认卡片 */
+  #entryCard h3 { font-size: 15px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+  #entryCard h3 .close { background: none; border: none; color: #8a919f; font-size: 18px; cursor: pointer; }
+  .typeseg { display: flex; border: 1px solid #e0e3e8; border-radius: 10px; overflow: hidden; margin-bottom: 12px; }
+  .typeseg button { flex: 1; padding: 9px 0; border: none; background: #fff; font-size: 14px; cursor: pointer; color: #646a73; font-family: inherit; }
+  .typeseg button.active-exp { background: #00b578; color: #fff; font-weight: 600; }
+  .typeseg button.active-inc { background: #ff6a00; color: #fff; font-weight: 600; }
+
+  /* 统计 */
+  .monthnav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .monthnav .m { font-size: 16px; font-weight: 700; }
+  .monthnav button { background: #f2f3f5; border: none; width: 30px; height: 30px; border-radius: 8px; font-size: 15px; cursor: pointer; color: #41464f; }
+  .statgrid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .statbox { background: #f7f8fa; border-radius: 10px; padding: 10px 8px; text-align: center; }
+  .statbox .k { font-size: 12px; color: #8a919f; }
+  .statbox .v { font-size: 16px; font-weight: 700; margin-top: 2px; }
+  .statbox .v.inc { color: #ff6a00; }
+  .statbox .v.exp { color: #00b578; }
+  .sec-title { font-size: 13px; color: #646a73; margin: 14px 0 8px; font-weight: 600; }
+  .catbar { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; font-size: 13px; }
+  .catbar .name { width: 52px; color: #41464f; flex: none; text-align: right; }
+  .catbar .track { flex: 1; background: #f0f1f4; height: 14px; border-radius: 7px; overflow: hidden; }
+  .catbar .fill { height: 100%; background: #3370ff; border-radius: 7px; }
+  .catbar .amt { width: 76px; flex: none; color: #646a73; text-align: right; }
+  .trend { display: flex; align-items: flex-end; gap: 6px; height: 96px; padding-top: 6px; }
+  .trend .col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 4px; }
+  .trend .bars { display: flex; gap: 2px; align-items: flex-end; height: 64px; }
+  .trend .bar { width: 9px; border-radius: 3px 3px 0 0; min-height: 2px; }
+  .trend .bar.e { background: #00b578; }
+  .trend .bar.i { background: #ff6a00; }
+  .trend .lbl { font-size: 10px; color: #a6abb5; }
+  .ai-summary { margin-top: 12px; font-size: 13px; color: #41464f; background: #f7f8fa; border-radius: 10px; padding: 12px; white-space: pre-wrap; }
+
+  /* 流水列表 */
+  .daygroup { margin-bottom: 4px; }
+  .dayhead { font-size: 13px; color: #8a919f; padding: 8px 2px 4px; display: flex; justify-content: space-between; }
+  .txrow { display: flex; align-items: center; padding: 10px 2px; border-bottom: 1px solid #f2f3f5; }
+  .txrow:last-child { border-bottom: none; }
+  .txrow .cat { width: 40px; height: 40px; border-radius: 12px; background: #eef4ff; color: #3370ff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; flex: none; }
+  .txrow .mid { flex: 1; min-width: 0; margin-left: 10px; }
+  .txrow .note { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .txrow .sub { font-size: 12px; color: #a6abb5; margin-top: 1px; }
+  .txrow .amt { font-size: 15px; font-weight: 700; margin-left: 8px; }
+  .txrow .amt.inc { color: #ff6a00; }
+  .txrow .amt.exp { color: #00b578; }
+  .txrow .del { background: none; border: none; color: #c9cdd4; font-size: 15px; cursor: pointer; padding: 6px 2px; margin-left: 2px; }
+  .txrow .del:hover { color: #e54545; }
+  .empty { text-align: center; color: #a6abb5; font-size: 13px; padding: 22px 0; }
+
+  /* Toast */
+  #toast {
+    position: fixed; left: 50%; bottom: 44px; transform: translateX(-50%) translateY(20px);
+    background: rgba(31,35,41,.88); color: #fff; padding: 9px 18px; border-radius: 20px;
+    font-size: 13px; opacity: 0; pointer-events: none; transition: all .25s; z-index: 99; max-width: 86%;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .spin { display: inline-block; animation: rot 1s linear infinite; }
+  @keyframes rot { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div id="page">
+
+  <!-- ============ 登录 ============ -->
+  <div id="loginView">
+    <div class="logo">
+      <div class="icon">📒</div>
+      <h1>AI 记账本</h1>
+      <p>说一句话，AI 帮你记好账</p>
+    </div>
+    <div class="card">
+      <div class="tabs">
+        <button id="tabPwd" class="active" type="button">密码登录</button>
+        <button id="tabOtp" type="button">验证码登录</button>
+      </div>
+
+      <!-- 密码登录 -->
+      <form id="pwdForm">
+        <div class="field"><input id="pwdEmail" type="email" placeholder="邮箱" autocomplete="username"></div>
+        <div class="field"><input id="pwdPass" type="password" placeholder="密码" autocomplete="current-password"></div>
+        <div class="err" id="pwdErr"></div>
+        <button class="btn btn-primary" id="pwdBtn" type="submit">登 录</button>
+        <button class="link" id="toReset" type="button">忘记密码？</button>
+      </form>
+
+      <!-- 验证码登录 / 注册 -->
+      <form id="otpForm" class="hide">
+        <div class="row">
+          <div class="field"><input id="otpEmail" type="email" placeholder="邮箱"></div>
+          <button class="btn btn-plain btn-side" id="otpSend" type="button">获取验证码</button>
+        </div>
+        <div class="field"><input id="otpCode" inputmode="numeric" placeholder="邮箱验证码"></div>
+        <div class="field"><input id="otpPass" type="password" placeholder="密码（新用户注册时设置）"></div>
+        <div class="err" id="otpErr"></div>
+        <button class="btn btn-primary" id="otpBtn" type="submit">登录 / 注册</button>
+      </form>
+
+      <!-- 重置密码 -->
+      <form id="resetForm" class="hide">
+        <div class="row">
+          <div class="field"><input id="rstEmail" type="email" placeholder="邮箱"></div>
+          <button class="btn btn-plain btn-side" id="rstSend" type="button">发送重置码</button>
+        </div>
+        <div class="field"><input id="rstCode" inputmode="numeric" placeholder="邮箱中的验证码"></div>
+        <div class="field"><input id="rstPass" type="password" placeholder="新密码"></div>
+        <div class="err" id="rstErr"></div>
+        <button class="btn btn-primary" id="rstBtn" type="submit" disabled>重置密码</button>
+        <button class="link" id="backLogin" type="button">返回登录</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============ 主界面 ============ -->
+  <div id="appView" class="hide">
+    <header>
+      <div>
+        <div class="title">📒 AI 记账本</div>
+        <div class="user" id="userEmail"></div>
+      </div>
+      <button id="signOut" type="button">退出</button>
+    </header>
+
+    <!-- 记一笔 -->
+    <div class="card">
+      <div class="inputbar">
+        <textarea id="sayInput" placeholder="说说你的收支，如：午饭花了25块"></textarea>
+        <button class="iconbtn" id="micBtn" type="button" title="语音输入">🎤</button>
+      </div>
+      <div class="hint" id="micHint">支持文字或语音，例如「昨天打车花了18」「发工资了8500」</div>
+      <div class="actions">
+        <button class="btn btn-primary" id="aiBtn" type="button">✨ AI 记一笔</button>
+        <button class="btn btn-ghost" id="manualBtn" type="button">手动填写</button>
+      </div>
+    </div>
+
+    <!-- 记账确认卡片 -->
+    <div class="card hide" id="entryCard">
+      <h3><span id="entryTitle">确认记账</span><button class="close" id="entryClose" type="button">✕</button></h3>
+      <div class="typeseg">
+        <button type="button" id="segExp">支出</button>
+        <button type="button" id="segInc">收入</button>
+      </div>
+      <div class="row">
+        <div class="field"><label>金额（元）</label><input id="entryAmt" type="number" min="0.01" step="0.01" placeholder="0.00"></div>
+        <div class="field"><label>日期</label><input id="entryDate" type="date"></div>
+      </div>
+      <div class="field"><label>分类</label><select id="entryCat"></select></div>
+      <div class="field"><label>备注</label><input id="entryNote" type="text" placeholder="补充说明（可选）"></div>
+      <div class="err" id="entryErr"></div>
+      <button class="btn btn-primary" id="saveBtn" type="button">保存</button>
+    </div>
+
+    <!-- 统计 -->
+    <div class="card">
+      <div class="monthnav">
+        <button id="mPrev" type="button">‹</button>
+        <div class="m" id="mLabel"></div>
+        <button id="mNext" type="button">›</button>
+      </div>
+      <div class="statgrid">
+        <div class="statbox"><div class="k">收入</div><div class="v inc" id="statInc">¥0</div></div>
+        <div class="statbox"><div class="k">支出</div><div class="v exp" id="statExp">¥0</div></div>
+        <div class="statbox"><div class="k">结余</div><div class="v" id="statBal">¥0</div></div>
+      </div>
+      <div class="sec-title">支出分类</div>
+      <div id="catBars"></div>
+      <div class="sec-title">近 6 个月趋势 <span style="font-weight:400;color:#a6abb5">（绿=支出 橙=收入）</span></div>
+      <div class="trend" id="trend"></div>
+      <div style="margin-top:12px">
+        <button class="btn btn-plain" id="aiSummaryBtn" type="button">🤖 AI 本月财务小结</button>
+        <div class="ai-summary hide" id="aiSummary"></div>
+      </div>
+    </div>
+
+    <!-- 流水 -->
+    <div class="card">
+      <div class="sec-title" style="margin-top:0">收支明细</div>
+      <div id="txList"></div>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ========== 云服务客户端 ========== */
+  var publicConfig = {
+    endpoint: 'https://ai-jizhang.app.workbuddy.host',
+    oauthRelayBaseUrl: 'https://www.workbuddy.cn/v2/as/genie-baas/oauth',
+    publishableKey: 'wbpk_EhyEDEV7o47DhroFhMiT8B_lvpKZjMwIwcb2V6ILKQj4koxGj9xNyAM'
+  };
+  var cloud = WorkBuddyCloud.createWorkBuddyCloud({
+    endpoint: publicConfig.endpoint,
+    oauthRelayBaseUrl: publicConfig.oauthRelayBaseUrl,
+    publishableKey: publicConfig.publishableKey
+  });
+
+  /* ========== 常量 ========== */
+  var EXP_CATS = ['餐饮', '交通', '购物', '居住', '娱乐', '医疗', '学习', '人情', '日用', '其他'];
+  var INC_CATS = ['工资', '兼职', '红包', '理财', '报销', '其他'];
+  var CAT_EMOJI = {
+    '餐饮': '🍜', '交通': '🚌', '购物': '🛍', '居住': '🏠', '娱乐': '🎮', '医疗': '💊',
+    '学习': '📚', '人情': '🧧', '日用': '🧻', '其他': '📝',
+    '工资': '💰', '兼职': '💼', '红包': '🧧', '理财': '📈', '报销': '🧾'
+  };
+
+  var state = {
+    records: [],
+    modelId: null,
+    statMonth: null,       // 'YYYY-MM'
+    entryType: 'expense',
+    entrySource: 'text',
+    pendingOtp: null,      // { email, verificationId, isExistingUser }
+    pendingReset: null,    // { email, updateUser }
+    otpCountdown: null
+  };
+
+  /* ========== 工具 ========== */
+  function $(id) { return document.getElementById(id); }
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function fmt(n) {
+    var v = Math.round(Number(n) * 100) / 100;
+    return '¥' + (Math.abs(v) >= 10000 ? v.toLocaleString('zh-CN', { maximumFractionDigits: 2 }) : v.toFixed(2));
+  }
+  function todayStr() {
+    var d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function monthOf(dateStr) { return String(dateStr || '').slice(0, 7); }
+  function curMonth() {
+    var d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+  }
+  function shiftMonth(ym, delta) {
+    var y = +ym.slice(0, 4), m = +ym.slice(5, 7) - 1 + delta;
+    var d = new Date(y, m, 1);
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+  }
+  function dateLabel(ds) {
+    var t = todayStr();
+    if (ds === t) return '今天';
+    var y = new Date(Date.now() - 86400000);
+    var yst = y.getFullYear() + '-' + String(y.getMonth() + 1).padStart(2, '0') + '-' + String(y.getDate()).padStart(2, '0');
+    if (ds === yst) return '昨天';
+    return ds;
+  }
+  var toastTimer = null;
+  function toast(msg) {
+    var t = $('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.classList.remove('show'); }, 2600);
+  }
+  function llmErrText(err) {
+    var code = (err && err.error && err.error.code) || '';
+    if (code.indexOf('quota_') === 0) return 'AI 额度不足或请求过于频繁，请稍后再试';
+    if (code.indexOf('auth_') === 0) return '云服务校验失败，请刷新页面重试';
+    if (code.indexOf('request_') === 0) return 'AI 请求参数异常，请重试';
+    return 'AI 服务暂时不可用，请稍后再试';
+  }
+
+  /* ========== 登录视图 ========== */
+  function showLogin() {
+    $('loginView').classList.remove('hide');
+    $('appView').classList.add('hide');
+  }
+  function switchTab(which) {
+    $('pwdForm').classList.toggle('hide', which !== 'pwd');
+    $('otpForm').classList.toggle('hide', which !== 'otp');
+    $('resetForm').classList.toggle('hide', which !== 'reset');
+    $('tabPwd').classList.toggle('active', which === 'pwd');
+    $('tabOtp').classList.toggle('active', which === 'otp');
+    $('pwdErr').textContent = ''; $('otpErr').textContent = ''; $('rstErr').textContent = '';
+  }
+  $('tabPwd').onclick = function () { switchTab('pwd'); };
+  $('tabOtp').onclick = function () { switchTab('otp'); };
+  $('toReset').onclick = function () { switchTab('reset'); };
+  $('backLogin').onclick = function () { switchTab('pwd'); };
+
+  // 密码登录
+  $('pwdForm').onsubmit = async function (e) {
+    e.preventDefault();
+    var email = $('pwdEmail').value.trim(), pass = $('pwdPass').value;
+    if (!email || !pass) { $('pwdErr').textContent = '请输入邮箱和密码'; return; }
+    $('pwdBtn').disabled = true; $('pwdBtn').textContent = '登录中…';
+    var res = await cloud.auth.signInWithPassword({ email: email, password: pass });
+    $('pwdBtn').disabled = false; $('pwdBtn').textContent = '登 录';
+    if (res.error) { $('pwdErr').textContent = res.error.kind === 'unauthenticated' || res.error.kind === 'invalid_grant' ? '邮箱或密码不正确' : (res.error.message || '登录失败，请重试'); return; }
+    enterApp(res.data && res.data.session || res.data);
+  };
+
+  // 验证码：发送
+  $('otpSend').onclick = async function () {
+    var email = $('otpEmail').value.trim();
+    if (!email) { $('otpErr').textContent = '请输入邮箱'; return; }
+    var btn = $('otpSend');
+    btn.disabled = true;
+    var res = await cloud.auth.sendOtp({ email: email });
+    if (res.error) { btn.disabled = false; $('otpErr').textContent = res.error.message || '验证码发送失败'; return; }
+    state.pendingOtp = { email: email, verificationId: res.data.verificationId, isExistingUser: res.data.isExistingUser };
+    $('otpErr').textContent = '';
+    toast('验证码已发送到邮箱');
+    var left = 60;
+    btn.textContent = left + 's';
+    state.otpCountdown = setInterval(function () {
+      left--;
+      if (left <= 0) { clearInterval(state.otpCountdown); btn.disabled = false; btn.textContent = '重新发送'; }
+      else btn.textContent = left + 's';
+    }, 1000);
+  };
+  // 验证码：提交（登录/注册）
+  $('otpForm').onsubmit = async function (e) {
+    e.preventDefault();
+    var p = state.pendingOtp;
+    var email = $('otpEmail').value.trim();
+    if (!p || p.email !== email) { $('otpErr').textContent = '请先获取当前邮箱的验证码'; return; }
+    var code = $('otpCode').value.trim(), pass = $('otpPass').value;
+    if (!code) { $('otpErr').textContent = '请输入验证码'; return; }
+    if (!p.isExistingUser && !pass) { $('otpErr').textContent = '新用户注册需要设置一个密码'; return; }
+    $('otpBtn').disabled = true; $('otpBtn').textContent = '验证中…';
+    var res = await cloud.auth.verifyOtp({
+      email: p.email, verificationId: p.verificationId, isExistingUser: p.isExistingUser,
+      token: code, password: p.isExistingUser ? undefined : pass
+    });
+    $('otpBtn').disabled = false; $('otpBtn').textContent = '登录 / 注册';
+    if (res.error) { $('otpErr').textContent = res.error.message || '验证失败，请重试'; return; }
+    state.pendingOtp = null;
+    enterApp(res.data && res.data.session || res.data);
+  };
+
+  // 重置密码
+  $('rstSend').onclick = async function () {
+    var email = $('rstEmail').value.trim();
+    if (!email) { $('rstErr').textContent = '请输入邮箱'; return; }
+    var btn = $('rstSend');
+    btn.disabled = true; btn.textContent = '发送中…';
+    var res = await cloud.auth.resetPasswordForEmail(email);
+    btn.disabled = false; btn.textContent = '重新发送';
+    if (res.error) { $('rstErr').textContent = res.error.message || '发送失败'; return; }
+    state.pendingReset = { email: email, updateUser: res.data.updateUser };
+    $('rstErr').textContent = ''; $('rstBtn').disabled = false;
+    toast('重置验证码已发送');
+  };
+  $('resetForm').onsubmit = async function (e) {
+    e.preventDefault();
+    var p = state.pendingReset;
+    if (!p) { $('rstErr').textContent = '请先发送重置验证码'; return; }
+    var code = $('rstCode').value.trim(), pass = $('rstPass').value;
+    if (!code || !pass) { $('rstErr').textContent = '请输入验证码和新密码'; return; }
+    $('rstBtn').disabled = true;
+    var res = await p.updateUser({ nonce: code, password: pass });
+    $('rstBtn').disabled = false;
+    if (res.error) { $('rstErr').textContent = res.error.message || '重置失败'; return; }
+    state.pendingReset = null; $('rstBtn').disabled = true;
+    toast('密码已重置');
+    switchTab('pwd');
+    $('pwdEmail').value = p.email;
+  };
+
+  $('signOut').onclick = async function () {
+    await cloud.auth.signOut();
+    location.reload();
+  };
+
+  /* ========== 主应用 ========== */
+  function enterApp(session) {
+    $('loginView').classList.add('hide');
+    $('appView').classList.remove('hide');
+    var u = session && session.user;
+    $('userEmail').textContent = (u && (u.email || u.phone || '已登录')) + '';
+    state.statMonth = curMonth();
+    $('entryDate').value = todayStr();
+    loadModels();
+    loadRecords();
+  }
+
+  async function loadModels() {
+    try {
+      var models = await cloud.llm.models.list();
+      var m = (models || []).find(function (x) { return x.disabled !== true; });
+      state.modelId = m ? m.id : null;
+    } catch (e) { state.modelId = null; }
+  }
+
+  async function loadRecords() {
+    var res = await cloud.database.from('transactions')
+      .select('*')
+      .order('tx_date', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(500);
+    if (res.error) {
+      toast('账目加载失败：' + (res.error.message || '请重试'));
+      state.records = [];
+    } else {
+      state.records = res.data || [];
+    }
+    renderStats();
+    renderList();
+  }
+
+  /* ---------- 语音输入 ---------- */
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var recog = null, listening = false;
+  if (SR) {
+    recog = new SR();
+    recog.lang = 'zh-CN';
+    recog.interimResults = true;
+    recog.continuous = false;
+    recog.onresult = function (e) {
+      var text = '';
+      for (var i = e.resultIndex; i < e.results.length; i++) text += e.results[i][0].transcript;
+      $('sayInput').value = text;
+      if (e.results[e.results.length - 1].isFinal) state.entrySource = 'voice';
+    };
+    recog.onend = function () { listening = false; $('micBtn').classList.remove('listening'); };
+    recog.onerror = function (e) {
+      listening = false; $('micBtn').classList.remove('listening');
+      toast(e.error === 'not-allowed' ? '麦克风权限被拒绝，请在浏览器设置中允许' : '语音识别失败，请重试');
+    };
+    $('micBtn').onclick = function () {
+      if (listening) { recog.stop(); return; }
+      try {
+        state.entrySource = 'voice';
+        recog.start();
+        listening = true;
+        $('micBtn').classList.add('listening');
+      } catch (e) { toast('语音启动失败，请重试'); }
+    };
+  } else {
+    $('micBtn').style.display = 'none';
+    $('micHint').textContent = '支持自然语言记账，例如「昨天打车花了18」「发工资了8500」';
+  }
+
+  /* ---------- AI 解析 ---------- */
+  var SYS_PROMPT = '你是一个严格的记账信息提取器。用户会说一句中文记账描述，你需要提取信息并只输出一个 JSON 对象，不要输出任何其他文字。'
+    + 'JSON 字段：type（"expense"支出 或 "income"收入）、amount（数字，单位元）、category（分类名，必须从给定列表中选择）、note（不超过10字的摘要）、date（格式 YYYY-MM-DD）。'
+    + '支出分类列表：' + EXP_CATS.join('、') + '。'
+    + '收入分类列表：' + INC_CATS.join('、') + '。'
+    + '如果用户没有说明日期，使用消息中给出的今天日期。如果描述中没有明确金额，amount 设为 0。'
+    + '判断不了收入还是支出时默认 expense。只输出 JSON。';
+
+  $('aiBtn').onclick = async function () {
+    var text = $('sayInput').value.trim();
+    if (!text) { toast('先说点什么，再点 AI 记一笔'); return; }
+    if (!state.modelId) { await loadModels(); }
+    if (!state.modelId) { toast('AI 服务暂不可用，请使用手动填写'); openEntry('expense', {}); return; }
+
+    var btn = $('aiBtn');
+    btn.disabled = true; btn.innerHTML = '<span class="spin">⏳</span> AI 正在理解…';
+    try {
+      var userMsg = '今天是 ' + todayStr() + '（星期' + '日一二三四五六'.charAt(new Date().getDay()) + '）。记账描述：「' + text + '」';
+      var answer = '';
+      for await (var chunk of cloud.llm.chat.completions.create({
+        model: state.modelId,
+        messages: [
+          { role: 'system', content: SYS_PROMPT },
+          { role: 'user', content: userMsg }
+        ],
+        stream: true,
+        temperature: 0.2,
+        response_format: { type: 'json_object' }
+      })) {
+        var d = chunk.choices && chunk.choices[0] && chunk.choices[0].delta;
+        if (d && d.content) answer += d.content;
+      }
+      var parsed = parseJsonLoose(answer);
+      if (!parsed) throw new Error('bad json');
+      var cats = parsed.type === 'income' ? INC_CATS : EXP_CATS;
+      var type = parsed.type === 'income' ? 'income' : 'expense';
+      if (!cats.includes(parsed.category)) parsed.category = '其他';
+      openEntry(type, {
+        amount: Number(parsed.amount) > 0 ? Number(parsed.amount) : '',
+        category: parsed.category,
+        note: parsed.note || text.slice(0, 10),
+        date: /^\d{4}-\d{2}-\d{2}$/.test(parsed.date) ? parsed.date : todayStr()
+      });
+      toast('AI 已识别，请确认后保存');
+    } catch (err) {
+      toast(llmErrText(err));
+      openEntry('expense', { note: text.slice(0, 10), date: todayStr() });
+    } finally {
+      btn.disabled = false; btn.textContent = '✨ AI 记一笔';
+    }
+  };
+
+  function parseJsonLoose(s) {
+    try { return JSON.parse(s); } catch (e) {}
+    var a = s.indexOf('{'), b = s.lastIndexOf('}');
+    if (a >= 0 && b > a) {
+      try { return JSON.parse(s.slice(a, b + 1)); } catch (e) {}
+    }
+    return null;
+  }
+
+  /* ---------- 记账确认卡片 ---------- */
+  $('manualBtn').onclick = function () { openEntry('expense', { date: todayStr() }); };
+  $('entryClose').onclick = function () { $('entryCard').classList.add('hide'); };
+
+  function openEntry(type, data) {
+    state.entryType = type === 'income' ? 'income' : 'expense';
+    fillCats();
+    $('entryAmt').value = data.amount != null ? data.amount : '';
+    $('entryDate').value = data.date || todayStr();
+    $('entryNote').value = data.note || '';
+    $('entryErr').textContent = '';
+    segRender();
+    $('entryCard').classList.remove('hide');
+    $('entryCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+  function fillCats() {
+    var cats = state.entryType === 'income' ? INC_CATS : EXP_CATS;
+    $('entryCat').innerHTML = cats.map(function (c) { return '<option value="' + esc(c) + '">' + esc(c) + '</option>'; }).join('');
+  }
+  function segRender() {
+    $('segExp').className = state.entryType === 'expense' ? 'active-exp' : '';
+    $('segInc').className = state.entryType === 'income' ? 'active-inc' : '';
+  }
+  $('segExp').onclick = function () { state.entryType = 'expense'; fillCats(); segRender(); };
+  $('segInc').onclick = function () { state.entryType = 'income'; fillCats(); segRender(); };
+
+  $('saveBtn').onclick = async function () {
+    var amt = parseFloat($('entryAmt').value);
+    if (!(amt > 0)) { $('entryErr').textContent = '请输入正确的金额'; return; }
+    var date = $('entryDate').value;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { $('entryErr').textContent = '请选择日期'; return; }
+    var row = {
+      type: state.entryType,
+      amount: Math.round(amt * 100) / 100,
+      category: $('entryCat').value,
+      note: $('entryNote').value.trim(),
+      tx_date: date,
+      source: state.entrySource
+    };
+    var btn = $('saveBtn');
+    btn.disabled = true; btn.textContent = '保存中…';
+    var res = await cloud.database.from('transactions').insert(row).select();
+    btn.disabled = false; btn.textContent = '保存';
+    if (res.error) {
+      $('entryErr').textContent = res.error.code === '42501' ? '登录状态失效，请刷新后重新登录' : (res.error.message || '保存失败，请重试');
+      return;
+    }
+    var created = (res.data || [])[0];
+    if (!created) { $('entryErr').textContent = '保存失败：无权限写入，请重新登录'; return; }
+    state.records.unshift(created);
+    state.records.sort(function (a, b) { return a.tx_date === b.tx_date ? (b.id - a.id) : (a.tx_date < b.tx_date ? 1 : -1); });
+    $('entryCard').classList.add('hide');
+    $('sayInput').value = '';
+    state.entrySource = 'text';
+    renderStats(); renderList();
+    toast('已记一笔 ✓');
+  };
+
+  /* ---------- 统计 ---------- */
+  $('mPrev').onclick = function () { state.statMonth = shiftMonth(state.statMonth, -1); renderStats(); };
+  $('mNext').onclick = function () { state.statMonth = shiftMonth(state.statMonth, 1); renderStats(); };
+
+  function renderStats() {
+    var ym = state.statMonth || curMonth();
+    state.statMonth = ym;
+    $('mLabel').textContent = ym;
+    var inc = 0, exp = 0, catMap = {};
+    state.records.forEach(function (r) {
+      if (monthOf(r.tx_date) !== ym) return;
+      var a = parseFloat(r.amount) || 0;
+      if (r.type === 'income') inc += a;
+      else { exp += a; catMap[r.category] = (catMap[r.category] || 0) + a; }
+    });
+    $('statInc').textContent = fmt(inc);
+    $('statExp').textContent = fmt(exp);
+    var bal = inc - exp;
+    $('statBal').textContent = (bal >= 0 ? '+' : '') + fmt(bal).replace('¥', '¥');
+    $('statBal').style.color = bal >= 0 ? '#ff6a00' : '#00b578';
+
+    // 分类条形图
+    var cats = Object.keys(catMap).map(function (k) { return { name: k, amt: catMap[k] }; });
+    cats.sort(function (a, b) { return b.amt - a.amt; });
+    if (!cats.length) {
+      $('catBars').innerHTML = '<div class="empty">本月暂无支出</div>';
+    } else {
+      var max = cats[0].amt;
+      $('catBars').innerHTML = cats.slice(0, 8).map(function (c) {
+        var w = Math.max(4, Math.round(c.amt / max * 100));
+        return '<div class="catbar"><span class="name">' + esc(c.name) + '</span>'
+          + '<div class="track"><div class="fill" style="width:' + w + '%"></div></div>'
+          + '<span class="amt">' + fmt(c.amt) + '</span></div>';
+      }).join('');
+    }
+
+    // 近 6 个月趋势
+    var html = '', maxv = 0, months = [];
+    for (var i = 5; i >= 0; i--) months.push(shiftMonth(ym, -i));
+    var agg = months.map(function (m) {
+      var inc2 = 0, exp2 = 0;
+      state.records.forEach(function (r) {
+        if (monthOf(r.tx_date) !== m) return;
+        var a = parseFloat(r.amount) || 0;
+        if (r.type === 'income') inc2 += a; else exp2 += a;
+      });
+      maxv = Math.max(maxv, inc2, exp2);
+      return { m: m, inc: inc2, exp: exp2 };
+    });
+    agg.forEach(function (a) {
+      var he = maxv ? Math.max(2, Math.round(a.exp / maxv * 60)) : 2;
+      var hi = maxv ? Math.max(2, Math.round(a.inc / maxv * 60)) : 2;
+      html += '<div class="col" title="' + a.m + ' 支出 ' + fmt(a.exp) + ' / 收入 ' + fmt(a.inc) + '">'
+        + '<div class="bars"><div class="bar e" style="height:' + he + 'px"></div><div class="bar i" style="height:' + hi + 'px"></div></div>'
+        + '<div class="lbl">' + a.m.slice(5) + '月</div></div>';
+    });
+    $('trend').innerHTML = html;
+    $('aiSummary').classList.add('hide');
+  }
+
+  /* ---------- AI 月度小结 ---------- */
+  $('aiSummaryBtn').onclick = async function () {
+    var ym = state.statMonth;
+    if (!state.modelId) { await loadModels(); }
+    if (!state.modelId) { toast('AI 服务暂不可用'); return; }
+    var inc = 0, exp = 0, catMap = {}, cnt = 0;
+    state.records.forEach(function (r) {
+      if (monthOf(r.tx_date) !== ym) return;
+      cnt++;
+      var a = parseFloat(r.amount) || 0;
+      if (r.type === 'income') inc += a; else { exp += a; catMap[r.category] = (catMap[r.category] || 0) + a; }
+    });
+    if (!cnt) { toast('本月还没有记录'); return; }
+    var btn = $('aiSummaryBtn');
+    btn.disabled = true; btn.innerHTML = '<span class="spin">⏳</span> AI 分析中…';
+    var box = $('aiSummary');
+    box.classList.remove('hide');
+    box.textContent = '分析中…';
+    try {
+      var cats = Object.keys(catMap).sort(function (a, b) { return catMap[b] - catMap[a]; })
+        .map(function (k) { return k + ' ' + fmt(catMap[k]); }).join('，');
+      var userMsg = '我的' + ym + '月财务数据：共 ' + cnt + ' 笔记录，收入 ' + fmt(inc) + '，支出 ' + fmt(exp) + '，结余 ' + fmt(inc - exp)
+        + '。支出分类明细：' + (cats || '无') + '。请给出简短的个人财务小结（150字以内），包括消费结构点评和下月建议。';
+      var answer = '';
+      for await (var chunk of cloud.llm.chat.completions.create({
+        model: state.modelId,
+        messages: [
+          { role: 'system', content: '你是一位贴心的个人财务助手，语气亲切自然，用简体中文回复，只输出小结正文。' },
+          { role: 'user', content: userMsg }
+        ],
+        stream: true,
+        temperature: 0.7
+      })) {
+        var d = chunk.choices && chunk.choices[0] && chunk.choices[0].delta;
+        if (d && d.content) answer += d.content;
+      }
+      box.textContent = answer || '本月暂无法生成小结';
+    } catch (err) {
+      box.textContent = llmErrText(err);
+    } finally {
+      btn.disabled = false; btn.textContent = '🤖 AI 本月财务小结';
+    }
+  };
+
+  /* ---------- 流水列表 ---------- */
+  function renderList() {
+    if (!state.records.length) {
+      $('txList').innerHTML = '<div class="empty">还没有记录，说一句话开始记账吧</div>';
+      return;
+    }
+    var html = '', lastDate = null;
+    state.records.forEach(function (r) {
+      if (r.tx_date !== lastDate) {
+        if (lastDate !== null) html += '</div>';
+        html += '<div class="daygroup"><div class="dayhead"><span>' + esc(dateLabel(r.tx_date)) + '</span></div>';
+        lastDate = r.tx_date;
+      }
+      var isInc = r.type === 'income';
+      html += '<div class="txrow">'
+        + '<div class="cat">' + (CAT_EMOJI[r.category] || esc(String(r.category).slice(0, 1))) + '</div>'
+        + '<div class="mid"><div class="note">' + esc(r.note || r.category) + '</div>'
+        + '<div class="sub">' + esc(r.category) + (r.source === 'voice' ? ' · 语音' : '') + '</div></div>'
+        + '<div class="amt ' + (isInc ? 'inc' : 'exp') + '">' + (isInc ? '+' : '-') + fmt(r.amount) + '</div>'
+        + '<button class="del" data-id="' + r.id + '" title="删除">🗑</button>'
+        + '</div>';
+    });
+    html += '</div>';
+    $('txList').innerHTML = html;
+
+    Array.prototype.forEach.call(document.querySelectorAll('.txrow .del'), function (b) {
+      b.onclick = async function () {
+        if (!window.confirm('确定删除这条记录吗？')) return;
+        var id = Number(this.getAttribute('data-id'));
+        var res = await cloud.database.from('transactions').delete().eq('id', id).select();
+        var removed = Array.isArray(res.data) ? res.data : [];
+        if (res.error || removed.length === 0) { toast('删除失败，请重试'); return; }
+        state.records = state.records.filter(function (r) { return r.id !== id; });
+        renderStats(); renderList();
+        toast('已删除');
+      };
+    });
+  }
+
+  /* ========== 启动 ========== */
+  (async function boot() {
+    try {
+      var res = await cloud.auth.getSession();
+      if (res.data) { enterApp(res.data); return; }
+    } catch (e) { /* 继续显示登录 */ }
+    showLogin();
+  })();
+})();
+</script>
+</body>
+</html>
